@@ -1,0 +1,8 @@
+// Cloudflare Workers 靜態網站設定：Cloudflare 會先執行 node scripts/build.mjs，再把 dist/ 發佈出去
+{
+  "name": "zhou-family-kana",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    "directory": "./dist"
+  }
+}
