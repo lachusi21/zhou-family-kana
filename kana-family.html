@@ -818,7 +818,8 @@ async function finish(mid,q){
   const id=`${TODAY}_${mid}_${rec.at.toString(36)}`;
   let ok=false;
   if(db){try{await db.collection('scores').doc(id).set(rec);ok=true;q.status=`已存進${MEM[mid].name}的成績簿，全家都看得到。`}catch(e){q.status=e&&e.code==='invalid_argument'?'你目前的權限不能寫入共用紀錄，這次成績只存在這台裝置上。':'暫時連不上，這次成績先存在這台裝置上。'}}
-  if(!ok){localRecs.push({...rec,local:true});store.set('kana.local',localRecs);if(!db)q.status=`已存進${MEM[mid].name}的成績簿（存在這台裝置上）。`}
+  else if(useApi){try{await apiSave([toApi({...rec,id})]);dbRecs=[{...rec,id}].concat(dbRecs);ok=true;q.status=`已存進${MEM[mid].name}的成績簿，全家的手機都看得到。`}catch(e){q.status='暫時連不上網路，這次成績先存在這台裝置上，下次連上會自動補傳。'}}
+  if(!ok){localRecs.push({...rec,id,local:true});store.set('kana.local',localRecs);if(!db&&!useApi)q.status=`已存進${MEM[mid].name}的成績簿（存在這台裝置上）。`}
   if(tab===mid){renderQuiz();renderRecord()}
 }
 
@@ -848,11 +849,42 @@ document.addEventListener('keydown',e=>{
 
 renderAll();
 
-/* ---------- 共用成績紀錄 ---------- */
+/* ---------- 共用成績紀錄 ----------
+   claude.ai 上用內建資料庫；GitHub Pages 和 Cloudflare 網站用 Cloudflare 上的成績 API */
+const API=location.hostname.endsWith('github.io')?'https://zhou-family-kana.y-rojets.workers.dev/api/scores'
+  :(location.hostname.endsWith('workers.dev')||location.hostname==='localhost')?'/api/scores':null;
+let useApi=false;
+const validRec=r=>r&&MEM[r.member]&&typeof r.date==='string'&&typeof r.score==='number';
+const toApi=r=>({id:r.id||`${r.date}_${r.member}_${r.at.toString(36)}`,member:r.member,date:r.date,score:r.score,wrong:Array.isArray(r.wrong)?r.wrong:[],at:r.at});
+async function apiLoad(){
+  const res=await fetch(API,{cache:'no-store'});if(!res.ok)throw new Error(res.status);
+  const j=await res.json();dbRecs=(j.scores||[]).filter(validRec);
+}
+async function apiSave(list){
+  const res=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(list)});
+  if(!res.ok)throw new Error(res.status);
+}
+async function uploadLocal(){
+  if(!localRecs.length)return;
+  try{await apiSave(localRecs.map(toApi));localRecs=[];store.set('kana.local',localRecs);await apiLoad()}catch(e){}
+}
+async function refreshApi(){
+  try{await uploadLocal();await apiLoad();if(tab!=='chart')renderRecord();else renderTabs()}catch(e){}
+}
 (async()=>{
   const sync=document.getElementById('sync');
   try{db=window.claude&&window.claude.use?await window.claude.use('db'):null}catch(e){db=null}
-  if(!db){dbReady=true;sync.textContent='成績存在這台裝置上';renderRecord();return}
+  if(!db){
+    if(API){
+      try{
+        await apiLoad();useApi=true;sync.textContent='成績紀錄全家共用';
+        await uploadLocal();
+        setInterval(refreshApi,30000);
+        document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshApi()});
+      }catch(e){sync.textContent='連不上共用紀錄，成績先存在這台裝置上'}
+    }else sync.textContent='成績存在這台裝置上';
+    dbReady=true;renderRecord();return;
+  }
   sync.textContent='成績紀錄全家共用';
   db.collection('scores').orderBy('at','desc').limit(1000).onSnapshot(snap=>{
     dbRecs=snap.docs.map(d=>d.data()).filter(r=>r&&MEM[r.member]&&typeof r.date==='string');

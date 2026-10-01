@@ -4,4 +4,4 @@
 
 - 網頁內容在 `kana-family.html`，`node scripts/build.mjs` 會把它包成 `dist/index.html`。
 - 推送到 `main` 後，GitHub Actions 會部署到 GitHub Pages；Cloudflare 會用 `wrangler.jsonc` 自動建置並部署到 Workers。
-- 在這兩個網站上，成績存在各自裝置的瀏覽器裡；全家共用的成績紀錄只在 claude.ai 的版本有。
+- 成績存在 Cloudflare D1（`src/worker.js` 提供 `/api/scores`），GitHub Pages 和 Cloudflare 兩個網站共用；claude.ai 版本用它自己的資料庫。

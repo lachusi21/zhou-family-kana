@@ -1,12 +1,21 @@
-// Cloudflare Workers 靜態網站設定：部署前先執行 node scripts/build.mjs，再把 dist/ 發佈出去
+// Cloudflare Workers 設定：部署前先執行 node scripts/build.mjs；/api/scores 由 src/worker.js 處理，其他是 dist/ 的靜態網頁
 {
   "name": "zhou-family-kana",
+  "main": "src/worker.js",
   "compatibility_date": "2026-09-01",
   "build": {
     "command": "node scripts/build.mjs"
   },
   "assets": {
-    "directory": "./dist"
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
   },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "zhou-family-kana-scores"
+    }
+  ],
   "workers_dev": true
 }
